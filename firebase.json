@@ -1,0 +1,59 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "amaudo-healthcare",
+          "appId": "1:412038702642:android:17be00049becea9c607e2b",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "amaudo-healthcare",
+          "configurations": {
+            "android": "1:412038702642:android:17be00049becea9c607e2b",
+            "ios": "1:412038702642:ios:a37885743bd7ae14607e2b",
+            "macos": "1:412038702642:ios:a37885743bd7ae14607e2b",
+            "web": "1:412038702642:web:5f151cd2625c8c06607e2b",
+            "windows": "1:412038702642:web:b8a13ba7e8313b3c607e2b"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "source": "functions"
+    },
+    {
+      "source": " app_notification",
+      "codebase": "app_notification",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ],
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  }
+}

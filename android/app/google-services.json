@@ -1,0 +1,90 @@
+{
+  "project_info": {
+    "project_number": "412038702642",
+    "project_id": "amaudo-healthcare",
+    "storage_bucket": "amaudo-healthcare.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:412038702642:android:f16dbf63bfd570a2607e2b",
+        "android_client_info": {
+          "package_name": "com.amaudo_management_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "412038702642-20ett3bqloitbo9ll8p1fmm9r6k54uij.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.amaudo_management_app",
+            "certificate_hash": "4d4916638c3755b1af691aefdf836465f3ad9a0d"
+          }
+        },
+        {
+          "client_id": "412038702642-2g715k4tkeuelif6972gldop99jdvc2v.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD7JUH6qhrnF3HkswipkJhQIdLpTYhtgi4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "412038702642-2g715k4tkeuelif6972gldop99jdvc2v.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "412038702642-t9m8qqjgkhsmej4s4a3lgkt05f75c1gv.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.amaudoManagementApp"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:412038702642:android:17be00049becea9c607e2b",
+        "android_client_info": {
+          "package_name": "com.example.amaudo_management_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "412038702642-2g715k4tkeuelif6972gldop99jdvc2v.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD7JUH6qhrnF3HkswipkJhQIdLpTYhtgi4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "412038702642-2g715k4tkeuelif6972gldop99jdvc2v.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "412038702642-t9m8qqjgkhsmej4s4a3lgkt05f75c1gv.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.amaudoManagementApp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
