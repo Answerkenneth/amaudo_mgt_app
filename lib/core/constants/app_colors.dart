@@ -17,10 +17,18 @@ class AppColors {
   static const Color divider = Color(0xFFE7E0DA);
   static const Color orangeTint = Color(0xFFFCE8D6);
 
+
   static const Color inputFill = Color(0xFFFAF6F2);
   static const Color inputBorder = Color(0xFFE3DAD2);
 
   static const Color error = Color(0xFFD64545);
   static const Color errorTint = Color(0xFFFCEAEA);
   static const Color success = Color(0xFF3FA66B);
+    /// Warm near-black used only behind the landing hero's glowing
+  /// brain visual, so the glow/network reads clearly. Deliberately
+  /// kept here (not hardcoded in the widget) so it stays themeable
+  /// alongside the rest of the palette when light/dark theming is
+  /// introduced.
+  static const Color heroDark = Color(0xFF17100A);
+  static const Color heroDarkDeep = Color(0xFF0D0906);
 }

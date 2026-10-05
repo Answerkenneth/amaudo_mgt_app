@@ -53,11 +53,8 @@ class _DiagnosisAnalyticsScreenState extends State<DiagnosisAnalyticsScreen> {
   // read needed — only the date range requires a reload).
   List<AnalyticsDiagnosisRecord> _currentRecords = [];
   List<AnalyticsDiagnosisRecord> _previousRecords = [];
-  AnalyticsDateRange? _currentRange;
-
-  TrendResult? _trend;
-
-  LocationFilter _locationFilter = const LocationFilter();
+  
+ LocationFilter _locationFilter = const LocationFilter();
 
   static const _listSectionKeys = ['illness', 'country', 'state', 'lga', 'phc'];
   final Map<String, TextEditingController> _searchControllers = {
@@ -143,7 +140,6 @@ class _DiagnosisAnalyticsScreenState extends State<DiagnosisAnalyticsScreen> {
       setState(() {
         _currentRecords = results[0];
         _previousRecords = results[1];
-        _currentRange = range;
         _locationFilter = const LocationFilter(); // new period → clear filter
       });
       _recompute();
@@ -157,8 +153,14 @@ class _DiagnosisAnalyticsScreenState extends State<DiagnosisAnalyticsScreen> {
     }
   }
 
-  /// Applies [_locationFilter] to the already-loaded raw records and
-  /// recomputes Medical/Geographic in memory — no Firestore read.
+    /// Applies [_locationFilter] to the already-loaded raw records and
+  /// recomputes every section — Medical (records, unique patients,
+  /// illness breakdown), Geographic, and the illness chart — from
+  /// that SAME filtered list, in memory, no Firestore read. No
+  /// section is ever computed from the unfiltered [_currentRecords]
+  /// directly; [filteredCurrent] is the single source every result
+  /// below is derived from, so a filter change updates all of them
+  /// together and none can drift out of sync with another.
   void _recompute() {
     final filteredCurrent =
         DiagnosisAnalyticsEngine.applyLocationFilter(_currentRecords, _locationFilter);
@@ -167,20 +169,11 @@ class _DiagnosisAnalyticsScreenState extends State<DiagnosisAnalyticsScreen> {
     final medical = DiagnosisAnalyticsEngine.computeMedical(filteredCurrent);
     final previousMedical = DiagnosisAnalyticsEngine.computeMedical(filteredPrevious);
     final geographic = DiagnosisAnalyticsEngine.computeGeographic(filteredCurrent);
-    final range = _currentRange;
-    final trend = range == null
-        ? null
-        : DiagnosisAnalyticsEngine.computeTrend(
-            filteredCurrent,
-            rangeStart: range.start,
-            rangeEnd: range.end,
-          );
     if (!mounted) return;
     setState(() {
       _medical = medical;
       _previousMedical = previousMedical;
       _geographic = geographic;
-      _trend = trend;
     });
   }
 
@@ -265,10 +258,25 @@ class _DiagnosisAnalyticsScreenState extends State<DiagnosisAnalyticsScreen> {
           ? DateTimeRange(start: _customStart!, end: _customEnd!)
           : DateTimeRange(start: now.subtract(const Duration(days: 7)), end: now),
     );
-    if (picked == null) return;
+       if (picked == null) return;
     setState(() {
       _customStart = picked.start;
-      _customEnd = picked.end;
+      // showDateRangePicker returns date-only values (midnight for both
+      // ends). Without extending the end to the last moment of that
+      // day, any diagnosis recorded after midnight on the selected end
+      // day is silently excluded from the query — including the common
+      // case of picking the same day as both start and end, which
+      // would otherwise return zero records even when diagnoses exist
+      // that day.
+      _customEnd = DateTime(
+        picked.end.year,
+        picked.end.month,
+        picked.end.day,
+        23,
+        59,
+        59,
+        999,
+      );
       _period = AnalyticsPeriod.custom;
     });
     _load();
@@ -340,8 +348,8 @@ class _DiagnosisAnalyticsScreenState extends State<DiagnosisAnalyticsScreen> {
           const SizedBox(height: AppSpacing.md),
           _buildStatsRow(medical, _previousMedical),
           const SizedBox(height: AppSpacing.lg),
-          if (_trend != null && _trend!.points.isNotEmpty) ...[
-            _buildTrendSection(_trend!),
+            if (medical.illnessBreakdown.isNotEmpty) ...[
+            _buildIllnessChartSection(medical),
             const SizedBox(height: AppSpacing.lg),
           ],
           _buildListSection(
@@ -653,19 +661,15 @@ class _DiagnosisAnalyticsScreenState extends State<DiagnosisAnalyticsScreen> {
     );
   }
 
-  Widget _buildTrendSection(TrendResult trend) {
-    final granularityLabel = switch (trend.granularity) {
-      TrendGranularity.daily => 'Daily',
-      TrendGranularity.weekly => 'Weekly',
-      TrendGranularity.monthly => 'Monthly',
-    };
+   Widget _buildIllnessChartSection(MedicalAnalyticsResult medical) {
+    final count = medical.illnessBreakdown.length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeader('Trend'),
+        _buildSectionHeader('Illness Distribution'),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          '$granularityLabel · ${trend.points.length} ${trend.points.length == 1 ? 'point' : 'points'}',
+          '$count ${count == 1 ? 'illness' : 'illnesses'} · reflects the selected period and location filter',
           style: const TextStyle(fontSize: AppTextSize.caption, color: AppColors.textSecondary),
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -676,7 +680,7 @@ class _DiagnosisAnalyticsScreenState extends State<DiagnosisAnalyticsScreen> {
             borderRadius: BorderRadius.circular(AppRadius.input),
             border: Border.all(color: AppColors.divider),
           ),
-          child: _TrendChart(trend: trend),
+          child: _IllnessChart(illnessBreakdown: medical.illnessBreakdown),
         ),
       ],
     );
@@ -830,81 +834,68 @@ class _Stat {
   const _Stat(this.label, this.value, [this.delta]);
 }
 
-/// Simple proportional-bar trend chart — no charting package (none is
-/// in pubspec.yaml). Renders one bar per [TrendPoint], height scaled
-/// to the largest value in the series; empty buckets render as a
-/// minimal-height bar so the timeline stays continuous rather than
-/// showing gaps as missing bars.
-class _TrendChart extends StatelessWidget {
-  final TrendResult trend;
-  const _TrendChart({required this.trend});
-
-  static const List<String> _monthAbbrev = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
-
-  String _labelFor(DateTime d) {
-    switch (trend.granularity) {
-      case TrendGranularity.daily:
-        return '${d.day}/${d.month}';
-      case TrendGranularity.weekly:
-        return '${d.day}/${d.month}';
-      case TrendGranularity.monthly:
-        return '${_monthAbbrev[d.month - 1]} ${d.year}';
-    }
-  }
+/// Categorical bar chart — no charting package (none is in
+/// pubspec.yaml). One bar per illness from the already-filtered
+/// [MedicalAnalyticsResult.illnessBreakdown] (see [_recompute] —
+/// same filtered dataset that drives every other section), height
+/// scaled to the largest illness's record count. Horizontally
+/// scrollable so it stays legible however many distinct illnesses
+/// (including free-text "Other" entries) the current period/location
+/// selection produces.
+class _IllnessChart extends StatelessWidget {
+  final List<IllnessBreakdown> illnessBreakdown;
+  const _IllnessChart({required this.illnessBreakdown});
 
   @override
   Widget build(BuildContext context) {
-    final points = trend.points;
-    final maxRecords = points.fold<int>(0, (max, p) => p.records > max ? p.records : max);
-    // Avoid a label under every single bar when there are many
-    // (e.g. a month of daily buckets) — thin them out so they don't
-    // overlap.
-       final labelEvery = (points.length / 8).ceil().clamp(1, points.isEmpty ? 1 : points.length);
+    final illnesses = illnessBreakdown;
+    final maxRecords = illnesses.fold<int>(0, (max, i) => i.records > max ? i.records : max);
 
-    return SizedBox(
-      height: 130,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          for (var i = 0; i < points.length; i++)
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 1),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    if (points[i].records > 0)
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: SizedBox(
+        height: 150,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            for (final illness in illnesses)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: SizedBox(
+                  width: 76,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
                       Text(
-                        '${points[i].records}',
+                        '${illness.records}',
                         style: const TextStyle(fontSize: 9, color: AppColors.textSecondary),
                       ),
-                    Container(
-                      height: maxRecords == 0
-                          ? 2
-                          : (points[i].records / maxRecords) * 88 + 2,
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryOrange,
-                        borderRadius: BorderRadius.circular(2),
+                      Center(
+                        child: Container(
+                          height: maxRecords == 0
+                              ? 2
+                              : (illness.records / maxRecords) * 72 + 2,
+                          width: 32,
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryOrange,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    if (i % labelEvery == 0)
+                      const SizedBox(height: 4),
                       Text(
-                        _labelFor(points[i].bucketStart),
-                        style: const TextStyle(fontSize: 8, color: AppColors.textSecondary),
+                        illness.illnessName,
+                        style: const TextStyle(fontSize: 9, color: AppColors.textSecondary),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      )
-                    else
-                      const SizedBox(height: 10),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

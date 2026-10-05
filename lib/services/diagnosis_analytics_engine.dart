@@ -9,9 +9,10 @@ import 'diagnosis_analytics_service.dart';
 ///   - Geographic Analytics: per-location record/unique-patient
 ///     counts for Country, State, LGA, and Primary Health Care.
 ///
-/// This file does NOT build any UI. It now includes trend bucketing
-/// (Chunk 7) in addition to aggregation and cascading location
-/// filtering.
+/// This file does NOT build any UI. It includes aggregation and
+/// cascading location filtering; time-based trend bucketing was
+/// removed (superseded by the illness/category chart) since nothing
+/// references it anymore.
 
 /// How trend points are bucketed. Chosen automatically from the
 /// span of the date range being analyzed — see
@@ -341,14 +342,29 @@ class DiagnosisAnalyticsEngine {
   /// value — so no further normalization is applied here). An empty
   /// `illnessName` groups under `'Not recorded'` rather than being
   /// dropped, so missing data stays visible instead of being hidden.
+  ///
+  /// Deduplicates by `diagnosisId` first: if the same diagnosis
+  /// document ever appears more than once in [records] (e.g. an
+  /// overlapping fetch), it is still counted exactly once — in the
+  /// total, in unique-patient counting, and within whichever
+  /// illness it belongs to. This is a distinct guarantee from
+  /// unique-patient counting: two different diagnoses for the same
+  /// patient and the same illness are NOT merged into one — only a
+  /// repeated `diagnosisId` (the same diagnosis) is.
   static MedicalAnalyticsResult computeMedical(
     List<AnalyticsDiagnosisRecord> records,
   ) {
-    final totalRecords = records.length;
-    final totalUniquePatients = records.map((r) => r.patientUid).toSet().length;
+    final dedupedById = <String, AnalyticsDiagnosisRecord>{};
+    for (final r in records) {
+      dedupedById[r.diagnosisId] = r;
+    }
+    final deduped = dedupedById.values.toList();
+
+    final totalRecords = deduped.length;
+    final totalUniquePatients = deduped.map((r) => r.patientUid).toSet().length;
 
     final recordsByIllness = <String, List<AnalyticsDiagnosisRecord>>{};
-    for (final r in records) {
+    for (final r in deduped) {
       final name = r.illnessName.trim().isEmpty ? 'Not recorded' : r.illnessName.trim();
       recordsByIllness.putIfAbsent(name, () => []).add(r);
     }
@@ -376,27 +392,40 @@ class DiagnosisAnalyticsEngine {
   /// Country/State/LGA/PHC counts, each level independent over the
   /// full [records] set, grouped by each field's already-normalized
   /// key (see [AnalyticsDiagnosisRecord] / [LocationNormalizer]).
+  ///
+  /// Deduplicates by `diagnosisId` first, for the same reason and in
+  /// the same way as [computeMedical]: if the same diagnosis
+  /// document ever appears more than once in [records], it must
+  /// still be counted once per location — otherwise Geographic
+  /// counts could disagree with Medical's `totalRecords` for the
+  /// identical filtered dataset.
   static GeographicAnalyticsResult computeGeographic(
     List<AnalyticsDiagnosisRecord> records,
   ) {
+    final dedupedById = <String, AnalyticsDiagnosisRecord>{};
+    for (final r in records) {
+      dedupedById[r.diagnosisId] = r;
+    }
+    final deduped = dedupedById.values.toList();
+
     return GeographicAnalyticsResult(
       byCountry: _aggregateLevel(
-        records,
+        deduped,
         LocationLevel.country,
         (r) => r.country,
       ),
       byState: _aggregateLevel(
-        records,
+        deduped,
         LocationLevel.state,
         (r) => r.state,
       ),
       byLga: _aggregateLevel(
-        records,
+        deduped,
         LocationLevel.lga,
         (r) => r.lga,
       ),
       byPrimaryHealthcareCenter: _aggregateLevel(
-        records,
+        deduped,
         LocationLevel.primaryHealthcareCenter,
         (r) => r.primaryHealthcareCenter,
       ),
